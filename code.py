@@ -1,18 +1,32 @@
 # =========================================================
-# FULLY AUTOMATIC EDGE AI PCB DEFECT DETECTION
-# FINAL USB CAMERA VERSION
+# FPGA EDGE AI PCB DEFECT DETECTION
+# FINAL ONE BUTTON INDUSTRIAL VERSION
 #
-# ✔ USB CAMERA INPUT
-# ✔ AUTOMATIC PCB DETECTION
-# ✔ NO KEYBOARD
-# ✔ HDMI DASHBOARD OUTPUT
-# ✔ 15 SEC RESULT DISPLAY
-# ✔ PROFESSIONAL UI
-# ✔ ACCURACY FIXED
-# ✔ REWORKABLE / NON-REWORKABLE
+# ✔ USB CAMERA LIVE VIEW
+# ✔ BTN0 CAPTURE
+# ✔ BTN0 AGAIN -> NEXT CAPTURE
+# ✔ HOLDS RESULT SCREEN
+# ✔ HDMI DASHBOARD
+# ✔ PERFECT ALIGNMENT
+# ✔ HORIZONTAL INDICATORS
+# ✔ NO TIMER
+# ✔ INDUSTRIAL EDGE DEVICE STYLE
 # ✔ YOLOv8n ONNX
 #
-# MODEL : best1.onnx
+# BTN0 WORKFLOW:
+#
+# PRESS BTN0
+#     ↓
+# CAPTURE PCB
+#     ↓
+# DETECT DEFECTS
+#     ↓
+# HOLD RESULT SCREEN
+#     ↓
+# PRESS BTN0 AGAIN
+#     ↓
+# NEXT PCB CAPTURE
+#
 # =========================================================
 
 import onnxruntime as ort
@@ -54,6 +68,12 @@ print("HDMI READY")
 
 
 # =========================================================
+# BUTTON
+# =========================================================
+btn0 = base.buttons[0]
+
+
+# =========================================================
 # CONFIG
 # =========================================================
 model_path = "best1.onnx"
@@ -63,10 +83,6 @@ img_size = 416
 conf_threshold = 0.25
 
 iou_threshold = 0.45
-
-motion_threshold = 5000000
-
-display_time = 15
 
 
 # =========================================================
@@ -108,7 +124,7 @@ print("MODEL LOADED")
 
 
 # =========================================================
-# NMS FUNCTION
+# NMS
 # =========================================================
 def nms(boxes, scores, iou_thresh):
 
@@ -216,9 +232,9 @@ except:
 # =========================================================
 cap = cv2.VideoCapture(0)
 
-cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+cap.set(cv2.CAP_PROP_FRAME_WIDTH,1280)
 
-cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
+cap.set(cv2.CAP_PROP_FRAME_HEIGHT,720)
 
 if not cap.isOpened():
 
@@ -226,18 +242,14 @@ if not cap.isOpened():
         "USB CAMERA NOT DETECTED"
     )
 
-print("AUTO EDGE AI SYSTEM STARTED")
+print("USB CAMERA READY")
+print("PRESS BTN0 TO CAPTURE")
 
 
 # =========================================================
-# INITIAL FRAME
+# DISPLAY MODE
 # =========================================================
-ret, prev_frame = cap.read()
-
-prev_gray = cv2.cvtColor(
-    prev_frame,
-    cv2.COLOR_BGR2GRAY
-)
+show_dashboard = False
 
 
 # =========================================================
@@ -245,399 +257,438 @@ prev_gray = cv2.cvtColor(
 # =========================================================
 while True:
 
-    ret, frame_bgr = cap.read()
-
-    if not ret:
-        continue
-
-
     # =====================================================
-    # LIVE CAMERA VIEW
+    # LIVE CAMERA MODE
     # =====================================================
-    live_view = cv2.resize(
-        frame_bgr,
-        (1280,720)
-    )
+    if not show_dashboard:
 
-    live_frame = hdmi_out.newframe()
-
-    live_frame[:] = live_view
-
-    hdmi_out.writeframe(live_frame)
-
-
-    # =====================================================
-    # MOTION DETECTION
-    # =====================================================
-    gray = cv2.cvtColor(
-        frame_bgr,
-        cv2.COLOR_BGR2GRAY
-    )
-
-    diff = cv2.absdiff(
-        prev_gray,
-        gray
-    )
-
-    motion_score = np.sum(diff)
-
-    prev_gray = gray.copy()
-
-
-    # =====================================================
-    # PCB DETECTED
-    # =====================================================
-    if motion_score > motion_threshold:
-
-        print("PCB DETECTED")
-
-        time.sleep(1)
-
-
-        # =================================================
-        # CAPTURE STABLE FRAME
-        # =================================================
         ret, frame_bgr = cap.read()
 
         if not ret:
             continue
 
-
-        frame_rgb = cv2.cvtColor(
+        live_view = cv2.resize(
             frame_bgr,
-            cv2.COLOR_BGR2RGB
+            (1280,720)
         )
 
-        h0, w0 = frame_rgb.shape[:2]
+        live_frame = hdmi_out.newframe()
+
+        live_frame[:] = live_view
+
+        hdmi_out.writeframe(live_frame)
 
 
         # =================================================
-        # PREPROCESS
+        # BTN0 -> CAPTURE
         # =================================================
-        img_resized = cv2.resize(
-            frame_rgb,
-            (img_size,img_size)
-        )
+        if btn0.read() == 1:
 
-        img_input = img_resized.astype(np.float32) / 255.0
+            print("CAPTURE STARTED")
 
-        img_input = np.transpose(
-            img_input,
-            (2,0,1)
-        )[None]
+            time.sleep(0.5)
 
+            ret, frame_bgr = cap.read()
 
-        # =================================================
-        # INFERENCE
-        # =================================================
-        start_time = time.time()
-
-        pred = session.run(
-            [output_name],
-            {input_name: img_input}
-        )[0]
-
-        latency = time.time() - start_time
-
-        fps = 1 / latency if latency > 0 else 0
-
-
-        # =================================================
-        # OUTPUT SHAPE
-        # =================================================
-        pred = pred[0].transpose()
-
-
-        # =================================================
-        # POSTPROCESS
-        # =================================================
-        boxes = []
-
-        scores = []
-
-        classes = []
-
-        for p in pred:
-
-            x, y, w, h = p[:4]
-
-            class_scores = p[4:]
-
-            cls = int(np.argmax(class_scores))
-
-            score = float(class_scores[cls])
-
-            if score < conf_threshold:
+            if not ret:
                 continue
 
-            x1 = max((x-w/2)*w0/img_size,0)
 
-            y1 = max((y-h/2)*h0/img_size,0)
-
-            x2 = min((x+w/2)*w0/img_size,w0)
-
-            y2 = min((y+h/2)*h0/img_size,h0)
-
-            boxes.append([x1,y1,x2,y2])
-
-            scores.append(score)
-
-            classes.append(cls)
-
-
-        # =================================================
-        # APPLY NMS
-        # =================================================
-        keep_idx = nms(
-            boxes,
-            scores,
-            iou_threshold
-        )
-
-        boxes = [boxes[i] for i in keep_idx]
-
-        scores = [scores[i] for i in keep_idx]
-
-        classes = [classes[i] for i in keep_idx]
-
-
-        # =================================================
-        # ACCURACY FIX
-        # =================================================
-        if len(scores) > 0:
-
-            accuracy = np.mean(scores) * 100
-
-        else:
-
-            accuracy = 100.0
-
-
-        # =================================================
-        # STATUS
-        # =================================================
-        if len(boxes) > 0:
-
-            pcb_status = "DEFECT DETECTED"
-
-            indicator_color = "red"
-
-        else:
-
-            pcb_status = "NO DEFECT"
-
-            indicator_color = "green"
-
-
-        # =================================================
-        # DRAW DETECTIONS
-        # =================================================
-        draw_img = Image.fromarray(frame_rgb)
-
-        draw_ctx = ImageDraw.Draw(draw_img)
-
-        for b, s, c in zip(boxes,scores,classes):
-
-            draw_ctx.rectangle(
-                b,
-                outline="lime",
-                width=4
+            # =============================================
+            # RGB
+            # =============================================
+            frame_rgb = cv2.cvtColor(
+                frame_bgr,
+                cv2.COLOR_BGR2RGB
             )
 
-            draw_ctx.text(
-                (b[0]+5,b[1]+5),
-                f"{class_names[c]} {s:.2f}",
-                fill="yellow",
-                font=font_small
+            h0, w0 = frame_rgb.shape[:2]
+
+
+            # =============================================
+            # PREPROCESS
+            # =============================================
+            img_resized = cv2.resize(
+                frame_rgb,
+                (img_size,img_size)
             )
 
+            img_input = img_resized.astype(np.float32) / 255.0
 
-        # =================================================
-        # CREATE DASHBOARD
-        # =================================================
-        report_img = Image.new(
-            "RGB",
-            (1280,720),
-            "white"
-        )
-
-        draw = ImageDraw.Draw(report_img)
+            img_input = np.transpose(
+                img_input,
+                (2,0,1)
+            )[None]
 
 
-        # =================================================
-        # TITLE
-        # =================================================
-        draw.text(
-            (220,20),
-            "PCB DEFECT DETECTION DASHBOARD",
-            fill="black",
-            font=font_title
-        )
+            # =============================================
+            # INFERENCE
+            # =============================================
+            start_time = time.time()
+
+            pred = session.run(
+                [output_name],
+                {input_name: img_input}
+            )[0]
+
+            latency = time.time() - start_time
+
+            fps = 1 / latency if latency > 0 else 0
 
 
-        # =================================================
-        # LEFT PANEL
-        # =================================================
-        y = 100
-
-        draw.text(
-            (40,y),
-            f"Accuracy : {accuracy:.2f} %",
-            fill="black",
-            font=font_big
-        )
-
-        y += 50
-
-        draw.text(
-            (40,y),
-            f"Latency : {latency:.2f} sec",
-            fill="black",
-            font=font_big
-        )
-
-        y += 50
-
-        draw.text(
-            (40,y),
-            f"FPS : {fps:.2f}",
-            fill="black",
-            font=font_big
-        )
-
-        y += 50
-
-        draw.text(
-            (40,y),
-            f"Defects : {len(boxes)}",
-            fill="black",
-            font=font_big
-        )
-
-        y += 50
-
-        draw.text(
-            (40,y),
-            f"Status : {pcb_status}",
-            fill=indicator_color,
-            font=font_big
-        )
-
-        y += 70
+            # =============================================
+            # OUTPUT SHAPE
+            # =============================================
+            pred = pred[0].transpose()
 
 
-        # =================================================
-        # DEFECT DETAILS
-        # =================================================
-        draw.text(
-            (40,y),
-            "Defect Details:",
-            fill="blue",
-            font=font_big
-        )
+            # =============================================
+            # POSTPROCESS
+            # =============================================
+            boxes = []
 
-        y += 40
+            scores = []
 
-        if len(classes) > 0:
+            classes = []
 
-            for cls in classes:
+            for p in pred:
 
-                defect_name = class_names[cls]
+                x, y, w, h = p[:4]
 
-                if defect_name in reworkable_classes:
+                class_scores = p[4:]
 
-                    rw = "REWORKABLE"
+                cls = int(np.argmax(class_scores))
 
-                else:
+                score = float(class_scores[cls])
 
-                    rw = "NON-REWORKABLE"
+                if score < conf_threshold:
+                    continue
 
-                draw.text(
-                    (60,y),
-                    f"- {defect_name} --> {rw}",
-                    fill="blue",
+                x1 = max((x-w/2)*w0/img_size,0)
+
+                y1 = max((y-h/2)*h0/img_size,0)
+
+                x2 = min((x+w/2)*w0/img_size,w0)
+
+                y2 = min((y+h/2)*h0/img_size,h0)
+
+                boxes.append([x1,y1,x2,y2])
+
+                scores.append(score)
+
+                classes.append(cls)
+
+
+            # =============================================
+            # APPLY NMS
+            # =============================================
+            keep_idx = nms(
+                boxes,
+                scores,
+                iou_threshold
+            )
+
+            boxes = [boxes[i] for i in keep_idx]
+
+            scores = [scores[i] for i in keep_idx]
+
+            classes = [classes[i] for i in keep_idx]
+
+
+            # =============================================
+            # ACCURACY
+            # =============================================
+            if len(scores) > 0:
+
+                accuracy = np.mean(scores) * 100
+
+            else:
+
+                accuracy = 100.0
+
+
+            # =============================================
+            # STATUS
+            # =============================================
+            if len(boxes) > 0:
+
+                pcb_status = "DEFECT DETECTED"
+
+                indicator_color = "red"
+
+            else:
+
+                pcb_status = "NO DEFECT"
+
+                indicator_color = "green"
+
+
+            # =============================================
+            # DRAW DETECTIONS
+            # =============================================
+            draw_img = Image.fromarray(frame_rgb)
+
+            draw_ctx = ImageDraw.Draw(draw_img)
+
+            for b, s, c in zip(boxes,scores,classes):
+
+                draw_ctx.rectangle(
+                    b,
+                    outline="lime",
+                    width=4
+                )
+
+                draw_ctx.text(
+                    (b[0]+5,b[1]+5),
+                    f"{class_names[c]} {s:.2f}",
+                    fill="yellow",
                     font=font_small
                 )
 
-                y += 30
 
-        else:
+            # =============================================
+            # CREATE DASHBOARD
+            # =============================================
+            report_img = Image.new(
+                "RGB",
+                (1280,720),
+                "white"
+            )
 
+            draw = ImageDraw.Draw(report_img)
+
+
+            # =============================================
+            # TITLE
+            # =============================================
             draw.text(
-                (60,y),
-                "- NONE",
-                fill="green",
-                font=font_small
+                (250,20),
+                "PCB DEFECT DETECTION DASHBOARD",
+                fill="black",
+                font=font_title
             )
 
 
-        # =================================================
-        # DIVIDER
-        # =================================================
-        draw.line(
-            [(620,70),(620,650)],
-            fill="blue",
-            width=3
-        )
+            # =============================================
+            # LEFT PANEL
+            # =============================================
+            y = 110
+
+            draw.text(
+                (40,y),
+                f"Accuracy : {accuracy:.2f} %",
+                fill="black",
+                font=font_big
+            )
+
+            y += 50
+
+            draw.text(
+                (40,y),
+                f"Latency : {latency:.2f} sec",
+                fill="black",
+                font=font_big
+            )
+
+            y += 50
+
+            draw.text(
+                (40,y),
+                f"FPS : {fps:.2f}",
+                fill="black",
+                font=font_big
+            )
+
+            y += 50
+
+            draw.text(
+                (40,y),
+                f"Defects : {len(boxes)}",
+                fill="black",
+                font=font_big
+            )
+
+            y += 50
+
+            draw.text(
+                (40,y),
+                f"Status : {pcb_status}",
+                fill=indicator_color,
+                font=font_big
+            )
+
+            y += 70
 
 
-        # =================================================
-        # IMAGE FRAME
-        # =================================================
-        draw.rectangle(
-            [(680,80),(1220,520)],
-            outline="black",
-            width=5
-        )
+            # =============================================
+            # DEFECT DETAILS
+            # =============================================
+            draw.text(
+                (40,y),
+                "Defect Details:",
+                fill="blue",
+                font=font_big
+            )
+
+            y += 40
+
+            if len(classes) > 0:
+
+                for cls in classes:
+
+                    defect_name = class_names[cls]
+
+                    if defect_name in reworkable_classes:
+
+                        rw = "REWORKABLE"
+
+                    else:
+
+                        rw = "NON-REWORKABLE"
+
+                    draw.text(
+                        (60,y),
+                        f"- {defect_name} --> {rw}",
+                        fill="blue",
+                        font=font_small
+                    )
+
+                    y += 30
+
+            else:
+
+                draw.text(
+                    (60,y),
+                    "- NONE",
+                    fill="green",
+                    font=font_small
+                )
 
 
-        # =================================================
-        # DETECTED IMAGE
-        # =================================================
-        det_img_resized = draw_img.resize(
-            (520,420)
-        )
-
-        report_img.paste(
-            det_img_resized,
-            (690,90)
-        )
+            # =============================================
+            # DIVIDER
+            # =============================================
+            draw.line(
+                [(620,70),(620,650)],
+                fill="blue",
+                width=3
+            )
 
 
-        # =================================================
-        # STATUS BAR
-        # =================================================
-        draw.rectangle(
-            [(700,550),(1180,600)],
-            fill=indicator_color
-        )
-
-        draw.text(
-            (810,560),
-            pcb_status,
-            fill="white",
-            font=font_big
-        )
+            # =============================================
+            # IMAGE BORDER
+            # =============================================
+            draw.rectangle(
+                [(680,80),(1220,520)],
+                outline="black",
+                width=5
+            )
 
 
-        # =================================================
-        # HDMI OUTPUT
-        # =================================================
-        output = np.array(report_img).astype(np.uint8)
+            # =============================================
+            # DETECTED IMAGE
+            # =============================================
+            det_img_resized = draw_img.resize(
+                (520,420)
+            )
 
-        frame_out = hdmi_out.newframe()
-
-        frame_out[:] = output
-
-        hdmi_out.writeframe(frame_out)
-
-        print("RESULT DISPLAYED")
+            report_img.paste(
+                det_img_resized,
+                (690,90)
+            )
 
 
-        # =================================================
-        # DISPLAY RESULT
-        # =================================================
-        time.sleep(display_time)
+            # =============================================
+            # STATUS BAR
+            # =============================================
+            draw.rectangle(
+                [(700,550),(1180,600)],
+                fill=indicator_color
+            )
+
+            draw.text(
+                (810,560),
+                pcb_status,
+                fill="white",
+                font=font_big
+            )
+
+
+            # =============================================
+            # HORIZONTAL INDICATORS
+            # =============================================
+            draw.ellipse(
+                [(700,620),(770,690)],
+                fill="red",
+                outline="black",
+                width=3
+            )
+
+            draw.text(
+                (790,640),
+                "DEFECT",
+                fill="red",
+                font=font_big
+            )
+
+            draw.ellipse(
+                [(980,620),(1050,690)],
+                fill="green",
+                outline="black",
+                width=3
+            )
+
+            draw.text(
+                (1070,640),
+                "NO DEFECT",
+                fill="green",
+                font=font_big
+            )
+
+
+            # =============================================
+            # HDMI OUTPUT
+            # =============================================
+            output = np.array(report_img).astype(np.uint8)
+
+            frame_out = hdmi_out.newframe()
+
+            frame_out[:] = output
+
+            hdmi_out.writeframe(frame_out)
+
+            print("RESULT DISPLAYED")
+
+            show_dashboard = True
+
+
+            # =============================================
+            # WAIT BUTTON RELEASE
+            # =============================================
+            while btn0.read() == 1:
+                pass
+
+            time.sleep(0.5)
+
+
+    # =====================================================
+    # HOLD DASHBOARD SCREEN
+    # =====================================================
+    else:
+
+        # =============================================
+        # PRESS BTN0 AGAIN FOR NEXT PCB
+        # =============================================
+        if btn0.read() == 1:
+
+            print("RETURN TO LIVE CAMERA")
+
+            show_dashboard = False
+
+            while btn0.read() == 1:
+                pass
+
+            time.sleep(0.5)
 
 
 # =========================================================
