@@ -6,6 +6,20 @@ This project implements a real-time PCB defect detection system using a YOLOv8n 
 
 The system integrates Computer Vision, Edge AI, FPGA-based embedded processing, HDMI visualization, and ESP32 communication to create a complete smart PCB inspection solution.
 
+## System Architecture
+
+ESP32
+   ↓
+PYNQ-Z2
+   ↓
+USB Camera
+   ↓
+YOLOv8n ONNX Inference
+   ↓
+Defect Detection
+   ↓
+HDMI Dashboard
+
 ## Features
 
 - Real-time PCB defect detection
