@@ -8,17 +8,7 @@ The system integrates Computer Vision, Edge AI, FPGA-based embedded processing, 
 
 ## System Architecture
 
-ESP32
-   ↓
-PYNQ-Z2
-   ↓
-USB Camera
-   ↓
-YOLOv8n ONNX Inference
-   ↓
-Defect Detection
-   ↓
-HDMI Dashboard
+![System Architecture](architecture.png)
 
 ## Features
 
